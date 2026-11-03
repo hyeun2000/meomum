@@ -11,6 +11,7 @@ const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
 const T = { profiles: 'meomum_profiles', posts: 'meomum_posts', comments: 'meomum_comments' };
 const BUCKET = 'meomum-photos';
+const DEMO = { email: 'demo@meomum.kr', password: 'meomum1234' };   // 누구나 써보는 공개 체험 계정
 const POST_SELECT = '*, author:meomum_profiles(display_name, username, profile_image), meomum_comments(count)';
 
 const CATEGORIES = [
@@ -196,17 +197,18 @@ function renderAuth(mode = 'login') {
         <button class="btn naver" data-sns="네이버">네이버로 시작하기</button>
         <button class="btn google" data-sns="Google">Google로 시작하기</button>
       </div>
-      <p class="hint">체험용 계정: demo@meomum.kr / meomum1234<br><a href="#" id="fillDemo" style="color:var(--purple)">체험 계정 자동 입력</a></p>
+      <button class="btn btn-ghost btn-block" id="demoLogin" style="margin-top:20px">👀 가입 없이 체험 계정으로 둘러보기</button>
+      <p class="hint">체험용 계정: ${DEMO.email} / ${DEMO.password}</p>
     </div>`;
 
   app.querySelectorAll('.seg button').forEach(b => b.onclick = () => renderAuth(b.dataset.mode));
   // SNS 로그인은 각 회사(카카오·네이버·구글) 개발자 키를 Supabase 에 등록해야 동작합니다
   app.querySelectorAll('[data-sns]').forEach(b => b.onclick = () => toast(`${b.dataset.sns} 로그인은 준비 중이에요. 이메일로 이용해주세요.`));
-  $('#fillDemo').onclick = e => {
-    e.preventDefault();
-    if (mode !== 'login') return renderAuth('login'), setTimeout(() => $('#fillDemo').click());
-    $('#authForm').email.value = 'demo@meomum.kr'; $('#authForm').password.value = 'meomum1234';
-  };
+  // 체험 계정 버튼: 이메일·비밀번호를 입력하지 않아도 바로 로그인
+  $('#demoLogin').onclick = e => busy(e.currentTarget, async () => {
+    const { error } = await sb.auth.signInWithPassword(DEMO);
+    if (error) toast('체험 계정 로그인에 실패했어요. 잠시 후 다시 시도해주세요.');
+  });
 
   $('#authForm').onsubmit = e => {
     e.preventDefault();
@@ -216,7 +218,11 @@ function renderAuth(mode = 'login') {
     busy(btn, async () => {
       if (mode === 'login') {
         const { error } = await sb.auth.signInWithPassword({ email: f.email, password: f.password });
-        if (error) return toast(/confirm/i.test(error.message) ? '이메일 인증을 먼저 완료해주세요.' : '이메일 또는 비밀번호를 확인해주세요.');
+        if (error) {
+          if (/confirm/i.test(error.message)) return toast('이메일 인증을 먼저 완료해주세요.');
+          if (f.email === DEMO.email) return toast(`체험 계정 비밀번호는 ${DEMO.password} 예요.`);
+          return toast('이메일 또는 비밀번호를 확인해주세요.');
+        }
         // 로그인 성공 → onAuthStateChange 가 화면을 이동시킵니다
       } else {
         if (!f.display_name.trim() || !f.email) return toast('모든 칸을 채워주세요.');
